@@ -2,6 +2,7 @@ import sys
 from django.utils.timezone import now
 try:
     from django.db import models
+    from django.core.validators import MaxValueValidator, MinValueValidator
 except Exception:
     print("There was an error loading django modules. Do you have django installed?")
     sys.exit()
@@ -12,10 +13,12 @@ import uuid
 
 # Instructor model
 class Instructor(models.Model):
+    # Online Course Models ER Diagram: onlinecourse_instructor
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-    )
+    ) # user_id
+
     full_time = models.BooleanField(default=True)
     total_learners = models.IntegerField()
 
@@ -25,10 +28,11 @@ class Instructor(models.Model):
 
 # Learner model
 class Learner(models.Model):
+    # Online Course Models ER Diagram: onlinecourse_learner
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-    )
+    ) # user_id
     STUDENT = 'student'
     DEVELOPER = 'developer'
     DATA_SCIENTIST = 'data_scientist'
@@ -54,14 +58,22 @@ class Learner(models.Model):
 
 # Course model
 class Course(models.Model):
+    # Online Course Models ER Diagram: onlinecourse_course
     name = models.CharField(null=False, max_length=30, default='online course')
     image = models.ImageField(upload_to='course_images/')
     description = models.CharField(max_length=1000)
     pub_date = models.DateField(null=True)
-    instructors = models.ManyToManyField(Instructor)
-    users = models.ManyToManyField(settings.AUTH_USER_MODEL, through='Enrollment')
     total_enrollment = models.IntegerField(default=0)
+
+    # Online Course Models ER Diagram: onlinecourse_course_instructors
+    instructors = models.ManyToManyField(Instructor)
+
+    # Online Course Models ER Diagram: onlinecourse_enrollment
+    users = models.ManyToManyField(settings.AUTH_USER_MODEL, through='Enrollment')
+    
     is_enrolled = False
+
+
 
     def __str__(self):
         return "Name: " + self.name + "," + \
@@ -70,9 +82,10 @@ class Course(models.Model):
 
 # Lesson model
 class Lesson(models.Model):
+    # Online Course Models ER Diagram: onlinecourse_lesson
+    course = models.ForeignKey(Course, on_delete=models.CASCADE) # course_id
     title = models.CharField(max_length=200, default="title")
     order = models.IntegerField(default=0)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
     content = models.TextField()
 
 
@@ -88,23 +101,31 @@ class Enrollment(models.Model):
         (HONOR, 'Honor'),
         (BETA, 'BETA')
     ]
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    # Online Course Models ER Diagram: onlinecourse_enrollment
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE) # user_id
+    course = models.ForeignKey(Course, on_delete=models.CASCADE) # course_id
+    
     date_enrolled = models.DateField(default=now)
     mode = models.CharField(max_length=5, choices=COURSE_MODES, default=AUDIT)
     rating = models.FloatField(default=5.0)
 
 
-# <HINT> Create a Question Model with:
+'''
+version zero:
+
+# Question model
+class Question(models.Model):
+    # Foreign key to lesson
+    # question text
+    # question grade/mark
+
+    # <HINT> Create a Question Model with:
     # Used to persist question content for a course
     # Has a One-To-Many (or Many-To-Many if you want to reuse questions) relationship with course
     # Has a grade point for each question
     # Has question content
     # Other fields and methods you would like to design
-#class Question(models.Model):
-    # Foreign key to lesson
-    # question text
-    # question grade/mark
+
 
     # <HINT> A sample model method to calculate if learner get the score of the question
     #def is_get_score(self, selected_ids):
@@ -116,19 +137,84 @@ class Enrollment(models.Model):
     #        return False
 
 
-#  <HINT> Create a Choice Model with:
+# Choice model
+class Choice(models.Model):
+    
+    # <HINT> Create a Choice Model with:
     # Used to persist choice content for a question
     # One-To-Many (or Many-To-Many if you want to reuse choices) relationship with Question
     # Choice content
     # Indicate if this choice of the question is a correct one or not
     # Other fields and methods you would like to design
-# class Choice(models.Model):
 
-# <HINT> The submission model
-# One enrollment could have multiple submission
-# One submission could have multiple choices
-# One choice could belong to multiple submissions
-#class Submission(models.Model):
-#    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
-#    choices = models.ManyToManyField(Choice)
-#    Other fields and methods you would like to design
+
+# Submission model
+class Submission(models.Model):
+    # enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
+    # choices = models.ManyToManyField(Choice)
+    # Other fields and methods you would like to design
+    
+    # <HINT> Create a Submission Model with:
+    # One enrollment could have multiple submission
+    # One submission could have multiple choices
+    # One choice could belong to multiple submissions
+
+
+'''
+
+
+'''
+version one:
+'''
+# Question model
+class Question(models.Model):
+    # Online Course Models ER Diagram: onlinecourse_question
+    # Note: One-To-Many (or Many-To-Many if you want to reuse questions) relationship with course
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE) # lesson_id
+    
+    course = models.ManyToManyField(Course) # course_id
+
+    # Online Course Models ER Diagram: onlinecourse_question
+    question_text = models.CharField(max_length=200)
+    grade = models.IntegerField(default=1, validators=[MaxValueValidator(100), MinValueValidator(1)])
+
+    # A sample model method to calculate if learner get the score of the question
+    def is_get_score(self, selected_ids):
+        all_answers = self.choice_set.filter(is_correct=True).count()
+        selected_correct = self.choice_set.filter(is_correct=True, id__in=selected_ids).count()
+        if all_answers == selected_correct:
+            return True
+        else:
+            return False
+
+    # Other fields and methods you would like to design
+    def __str__(self):
+        return self.question_text
+
+
+# Choice model
+class Choice(models.Model):
+    # Online Course Models ER Diagram: onlinecourse_choice
+    # Note: One-To-Many (or Many-To-Many if you want to reuse choices) relationship with Question
+    question = models.ForeignKey(Question, on_delete=models.CASCADE) # question_id
+    
+    # Online Course Models ER Diagram: onlinecourse_choice
+    choice_text = models.CharField(max_length=200)
+    is_correct = models.BooleanField(default=False)
+    
+    # Other fields and methods you would like to design
+    def __str__(self):
+        return self.choice_text
+
+# Submission model
+class Submission(models.Model):
+    # Online Course Models ER Diagram: onlinecourse_submission
+    # Note: One enrollment could have multiple submissions
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE) # enrollment_id
+
+    # Online Course Models ER Diagram: onlinecourse_submission_choices
+    # Note: One submission could have multiple choices
+    # Note: One choice could belong to multiple submissions    
+    choices = models.ManyToManyField(Choice)
+
+    # Other fields and methods you would like to design
